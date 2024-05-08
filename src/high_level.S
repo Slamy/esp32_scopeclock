@@ -42,7 +42,7 @@ _lx_intr_stack:
     s32i.n	a3, a2, 0
 
     // Wait for about one microsecond
-    movi a0, 100
+    movi a0, 50
 wait:
     addi a0, a0, -1
     BNEZ a0, wait

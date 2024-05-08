@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 #[path = "util.rs"]
 mod examples_util;
-use crate::font::Drawing;
+use crate::{analog_clock_face::GLOBAL_SCALE, font::Drawing};
 
 use bresenham::Bresenham;
 
@@ -59,25 +59,33 @@ impl<'a> Picture<'a> {
     }
 
     pub fn add_point(&mut self, x: u16, y: u16) {
-        self.tx_buffer[self.out_index + 1] = (x >> 1) as u8;
-        self.tx_buffer[self.out_index + 3] = (y >> 1) as u8;
+        if GLOBAL_SCALE == 2 {
+            self.tx_buffer[self.out_index + 1] = (x >> 1) as u8;
+            self.tx_buffer[self.out_index + 3] = (y >> 1) as u8;
 
-        if (x & 1) == 1 {
-            self.tx_buffer[self.out_index + 1 + 4] = ((x + 1) >> 1) as u8;
-        } else {
-            self.tx_buffer[self.out_index + 1 + 4] = (x >> 1) as u8;
-        }
-        if (y & 1) == 1 {
-            self.tx_buffer[self.out_index + 3 + 4] = ((y + 1) >> 1) as u8;
-        } else {
-            self.tx_buffer[self.out_index + 3 + 4] = (y >> 1) as u8;
-        }
+            if (x & 1) == 1 {
+                self.tx_buffer[self.out_index + 1 + 4] = ((x + 1) >> 1) as u8;
+            } else {
+                self.tx_buffer[self.out_index + 1 + 4] = (x >> 1) as u8;
+            }
+            if (y & 1) == 1 {
+                self.tx_buffer[self.out_index + 3 + 4] = ((y + 1) >> 1) as u8;
+            } else {
+                self.tx_buffer[self.out_index + 3 + 4] = (y >> 1) as u8;
+            }
 
-        self.tx_buffer[self.out_index + 0] = 0;
-        self.tx_buffer[self.out_index + 2] = 0;
-        self.tx_buffer[self.out_index + 0 + 4] = 0;
-        self.tx_buffer[self.out_index + 2 + 4] = 0;
-        self.out_index += 8;
+            self.tx_buffer[self.out_index + 0] = 0;
+            self.tx_buffer[self.out_index + 2] = 0;
+            self.tx_buffer[self.out_index + 0 + 4] = 0;
+            self.tx_buffer[self.out_index + 2 + 4] = 0;
+            self.out_index += 8;
+        } else {
+            self.tx_buffer[self.out_index + 1] = x as u8;
+            self.tx_buffer[self.out_index + 3] = y as u8;
+            self.tx_buffer[self.out_index + 0] = 0;
+            self.tx_buffer[self.out_index + 2] = 0;
+            self.out_index += 4;
+        }
     }
 
     pub fn add_raw_point(&mut self, x: u8, y: u8) {
@@ -173,23 +181,4 @@ impl<'a> Picture<'a> {
             self.add_open_polygon(&line);
         }
     }
-}
-
-/// Converts radial coordinate int cartesian
-/// Provide phi in range of 0 to 2*PI
-/// Returns coordinates with Y+ going up assuming a vector scope coordinate system
-/// Phi of 0 provides North, Phi of PI/2 provides East and so on.
-/// So this function is clock wise
-pub fn radial_to_cartesian(phi: f32, radius: f32) -> Point {
-    // TODO What is better? ceilf or roundf?
-    let x = ceilf(libm::sinf(phi) * radius) as isize + 0x82 * 2;
-    let y = ceilf(libm::cosf(phi) * radius) as isize + 0x82 * 2;
-    (x, y)
-}
-
-pub fn radial_to_cartesian_uncentered(phi: f32) -> (f32, f32) {
-    // TODO What is better? ceilf or roundf?
-    let x = libm::sinf(phi);
-    let y = libm::cosf(phi);
-    (x, y)
 }

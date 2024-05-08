@@ -121,7 +121,7 @@ pub async fn mqtt_stuff(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>
                     }
                 },
                 Either::Second(_timeout) => {
-                    client.send_ping().await.unwrap();
+                    client.send_ping().await;
                 }
             }
 
