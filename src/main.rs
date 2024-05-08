@@ -93,7 +93,6 @@ async fn main(spawner: Spawner) -> ! {
     let (wifi_interface, controller) =
         esp_wifi::wifi::new_with_mode(&init, wifi, WifiStaDevice).unwrap();
 
-
     let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
     embassy::init(&clocks, timer_group0);
 
@@ -190,8 +189,8 @@ async fn connection(mut controller: WifiController<'static>) {
             println!("Starting wifi");
             controller.start().await.unwrap();
             println!("Wifi started!");
-            let retval = unsafe {esp_wifi_set_max_tx_power(8)};
-            println!("tx power {}",retval);
+            //let retval = unsafe {esp_wifi_set_max_tx_power(8)};
+            //println!("tx power {}",retval);
         }
         println!("About to connect...");
 

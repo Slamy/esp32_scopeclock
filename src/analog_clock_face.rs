@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
-use chrono::TimeZone;
 use chrono::{DateTime, Timelike};
+use chrono::{Datelike, TimeZone};
 use libm::ceilf;
 
 
@@ -201,9 +201,7 @@ pub fn draw_analog_clock(tx_buffer: &mut [u8]) -> Picture {
         pic.add_closed_polygon(&hour_poly);
 
         // AM and PM
-        let is_pm = hours.0;
-        let index = if is_pm { 14 } else { 13 };
-        let pictogram = &font::FONT[index];
+
         let scaler = 7.5_f32 * GLOBAL_SCALE as f32;
 
         // Use some vector math to put the AM/PM at exactly the opposite center
@@ -216,10 +214,39 @@ pub fn draw_analog_clock(tx_buffer: &mut [u8]) -> Picture {
 
         let length = libm::sqrtf(translate_x * translate_x + translate_y * translate_y);
         let translate_x =
-            (40_f32 * GLOBAL_SCALE as f32 * translate_x / length) as isize + 0x82 * GLOBAL_SCALE;
+            (45_f32 * GLOBAL_SCALE as f32 * translate_x / length) as isize + 0x82 * GLOBAL_SCALE;
         let translate_y =
-            (40_f32 * GLOBAL_SCALE as f32 * translate_y / length) as isize + 0x82 * GLOBAL_SCALE;
-        pic.draw_font(pictogram, scaler, translate_x, translate_y);
+            (45_f32 * GLOBAL_SCALE as f32 * translate_y / length) as isize + 0x82 * GLOBAL_SCALE;
+
+        let show_date = (local_time.second() % 10) >= 5;
+        // let show_date = (local_time.second() % 2) >= 1;
+        if show_date {
+            let day = local_time.day();
+            let month = local_time.month();
+            //let month = 12;
+
+            let day_digit0 = (day / 10) as usize;
+            let day_digit1 = (day % 10) as usize;
+            // if day_digit0 > 0
+            {
+                let pictogram = &font::FONT[day_digit0];
+                pic.draw_font(pictogram, scaler, translate_x - 15 - 25, translate_y + 15);
+            }
+            let pictogram = &font::FONT[day_digit1];
+            pic.draw_font(pictogram, scaler, translate_x + 15 - 25, translate_y + 15);
+            let pictogram = &font::FONT[month as usize];
+            pic.draw_font(
+                pictogram,
+                scaler,
+                translate_x + 15 + 30 - 20,
+                translate_y - 30 + 15,
+            );
+        } else {
+            let is_pm = hours.0;
+            let index = if is_pm { 14 } else { 13 };
+            let pictogram = &font::FONT[index];
+            pic.draw_font(pictogram, scaler, translate_x, translate_y);
+        }
     }
 
     // Circle in the center because it is cute
