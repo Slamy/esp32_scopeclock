@@ -10,8 +10,8 @@ use hal::system::SoftwareInterrupt;
 #[path = "util.rs"]
 mod examples_util;
 
-use crate::analog_clock_face::draw_analog_clock;
-use crate::picture::Picture;
+use crate::analog_clock_face::{draw_dynamic_part, prepare_static_part};
+use crate::picture::{Picture, StaticPartMeta};
 
 use embassy_time::{Duration, Instant, Timer};
 use esp_backtrace as _;
@@ -52,8 +52,11 @@ pub static WAIT_AFTER_BEAM_ON: AtomicU32 = AtomicU32::new(0);
 
 static DMA_DATA: Mutex<RefCell<Option<DmaData>>> = Mutex::new(RefCell::new(None));
 
-fn draw_picture(tx_buffer: &mut [u8]) -> Picture {
-    draw_analog_clock(tx_buffer)
+fn draw_picture<'a, 'b>(
+    tx_buffer: &'a mut [u8],
+    static_part_meta: &'b StaticPartMeta,
+) -> Picture<'a> {
+    draw_dynamic_part(tx_buffer, static_part_meta)
 }
 
 pub fn scopeclock_init(
@@ -62,7 +65,7 @@ pub fn scopeclock_init(
     dma_channel: I2s0DmaChannelCreator,
     z_blank: GpioPin<Output<PushPull>, 32>,
     delay: Delay,
-) {
+) -> StaticPartMeta {
     let (tx_buffer1, tx_descriptors, _, rx_descriptors) = dma_buffers!(50000, 0);
     let (tx_buffer2, _, _, _) = dma_buffers!(50000, 0);
 
@@ -87,9 +90,13 @@ pub fn scopeclock_init(
         clocks,
     );
     let start = Instant::now();
-    let drawing1 = draw_picture(tx_buffer1);
+
+    let _static_part_meta = prepare_static_part(tx_buffer1);
+    let static_part_meta = prepare_static_part(tx_buffer2);
+
+    let drawing1 = draw_picture(tx_buffer1, &static_part_meta);
     println!("Drawing took {:?}ms", start.elapsed().as_millis());
-    let drawing2 = draw_picture(tx_buffer2);
+    let drawing2 = draw_picture(tx_buffer2, &static_part_meta);
 
     println!("{} bytes", drawing1.out_index);
 
@@ -112,10 +119,11 @@ pub fn scopeclock_init(
     interrupt::enable(Interrupt::FROM_CPU_INTR3, Priority::Priority3).unwrap();
 
     //interrupt::enable(Interrupt::I2S0, Priority::Priority3).unwrap();
+    static_part_meta
 }
 
 #[embassy_executor::task]
-pub async fn scopeclock_task() {
+pub async fn scopeclock_task(static_part_meta: StaticPartMeta) {
     loop {
         // Take the canvas if it exists
         let canvas = critical_section::with(|cs| {
@@ -128,8 +136,9 @@ pub async fn scopeclock_task() {
         // If there was a canvas we took, draw on it
         if let Some(canvas) = canvas {
             //let start = Instant::now();
-            let drawing = draw_picture(canvas);
+            let drawing = draw_picture(canvas, &static_part_meta);
             //println!("Drawing took {:?}ms", start.elapsed().as_millis());
+            //println!("{} bytes", drawing.out_index);
 
             critical_section::with(|cs| {
                 let mut dma_data = DMA_DATA.borrow_ref_mut(cs);
@@ -140,12 +149,11 @@ pub async fn scopeclock_task() {
             });
         }
 
-        Timer::after(Duration::from_millis(10)).await;
+        Timer::after(Duration::from_millis(5)).await;
     }
 }
 
 #[ram]
-
 fn select_next_picture(dma_data: &mut DmaData) {
     if let Some(next) = dma_data.next_display.take() {
         // So we have a next picture to display?
@@ -161,7 +169,6 @@ fn select_next_picture(dma_data: &mut DmaData) {
 }
 
 #[ram]
-
 fn update_frame() {
     //let transfer_line_for_line = (embassy_time::Instant::now().as_secs() % 10) >= 5;
     let transfer_line_for_line = true;

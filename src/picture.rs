@@ -44,7 +44,11 @@ pub struct Picture<'a> {
     pub out_index: usize,
     pub parts: Vec<(usize, usize)>,
     pub current_part: usize,
-    //iter: alloc::slice::Iter<'static, (usize, usize)>,
+}
+
+pub struct StaticPartMeta {
+    pub out_index: usize,
+    pub parts: Vec<(usize, usize)>,
 }
 
 impl<'a> Picture<'a> {
@@ -54,7 +58,6 @@ impl<'a> Picture<'a> {
             out_index: 0,
             parts: Vec::new(),
             current_part: 0,
-            // iter: alloc::slice::Iter::default(),
         }
     }
 

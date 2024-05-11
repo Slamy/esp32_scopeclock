@@ -5,7 +5,7 @@ use chrono::{Datelike, TimeZone};
 use libm::ceilf;
 
 
-use crate::picture::Picture;
+use crate::picture::{Picture, StaticPartMeta};
 use crate::{font, ntptime};
 use bresenham::Point;
 
@@ -35,35 +35,20 @@ pub fn radial_to_cartesian_uncentered(phi: f32) -> (f32, f32) {
     (x, y)
 }
 
-pub fn draw_analog_clock(tx_buffer: &mut [u8]) -> Picture {
-    let mut pic = Picture::new(tx_buffer);
-
-    /*
-       for i in 0..14 {
-           pic.add_dot(0x7a + i, 0x10 + 0x10 * i, 20);
-       }
-       for i in 0..14 {
-           pic.add_dot(0x08 + 0x10 * i, 0x7a + i, 20);
-       }
-    */
-    //return pic;
-
+fn draw_static_clock_face(pic: &mut Picture) {
     // Big circle as a round bezel
     pic.add_circle(
         (0x82 * GLOBAL_SCALE, 0x82 * GLOBAL_SCALE),
         (0x7d * GLOBAL_SCALE) as f32,
         40,
     );
-    //return pic;
 
-    /*
-    for i in 0..32 {
-        let phi = (i as f32 / 32.0) * core::f32::consts::PI * 2.0;
-        let inner = radial_to_cartesian(phi + param, (0x68 * GLOBAL_SCALE) as f32);
-        let outer = radial_to_cartesian(phi + param, (0x7c * GLOBAL_SCALE) as f32);
-        pic.add_line(inner, outer);
-    }
-    */
+    // Circle in the center because it is cute
+    pic.add_circle(
+        (0x82 * GLOBAL_SCALE, 0x82 * GLOBAL_SCALE),
+        (0x0a * GLOBAL_SCALE) as f32,
+        10,
+    );
 
     // Draw the clock face with
     // - dots at the minute marks
@@ -100,7 +85,9 @@ pub fn draw_analog_clock(tx_buffer: &mut [u8]) -> Picture {
             pic.add_dot2(outer, 14);
         }
     }
+}
 
+fn draw_dynamic_parts(pic: &mut Picture) {
     let local_time = critical_section::with(|cs| ntptime::PUBLIC_TIME.borrow(cs).get());
 
     // Draw the hands if we have the time to present
@@ -249,15 +236,26 @@ pub fn draw_analog_clock(tx_buffer: &mut [u8]) -> Picture {
         }
     }
 
-    // Circle in the center because it is cute
-    pic.add_circle(
-        (0x82 * GLOBAL_SCALE, 0x82 * GLOBAL_SCALE),
-        (0x0a * GLOBAL_SCALE) as f32,
-        10,
-    );
-
     // bring the beam to a position to rest until the next picture
     pic.add_raw_point(0, 0);
+}
 
+pub fn prepare_static_part(tx_buffer: &mut [u8]) -> StaticPartMeta {
+    let mut pic = Picture::new(tx_buffer);
+    draw_static_clock_face(&mut pic);
+    return StaticPartMeta {
+        out_index: pic.out_index,
+        parts: pic.parts,
+    };
+}
+
+pub fn draw_dynamic_part<'a, 'b>(
+    tx_buffer: &'a mut [u8],
+    static_part: &'b StaticPartMeta,
+) -> Picture<'a> {
+    let mut pic = Picture::new(tx_buffer);
+    pic.out_index = static_part.out_index;
+    pic.parts = static_part.parts.clone();
+    draw_dynamic_parts(&mut pic);
     pic
 }

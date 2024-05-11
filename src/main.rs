@@ -136,11 +136,11 @@ async fn main(spawner: Spawner) -> ! {
     let dma_channel = dma.i2s0channel;
     let i2s = peripherals.I2S0;
 
-    scopeclock_init(i2s, &clocks, dma_channel, z_blank, delay);
+    let static_part_meta = scopeclock_init(i2s, &clocks, dma_channel, z_blank, delay);
 
     spawner.spawn(connection(controller)).ok();
     spawner.spawn(net_task(stack)).ok();
-    spawner.spawn(scopeclock_task()).ok();
+    spawner.spawn(scopeclock_task(static_part_meta)).ok();
 
     loop {
         if stack.is_link_up() {

@@ -34,6 +34,7 @@ arm-none-eabi-nm -Crtd --size-sort target/xtensa-esp32-none-elf/release/scopeclo
     * Strahl in der Ecke lagern. Da wäre dann auch kein Phosphor mehr.
 * Externer DAC mit I2S und Z Blank im Sample?
 * Circular DMA ohne Pause?
+* Energiesparmodus ?
 
 
 NTP3 NtpResult { seconds: 1713908180, seconds_fraction: 1237931791, roundtrip: 34617, offset: -4512, stratum: 3, precision: -24 }
