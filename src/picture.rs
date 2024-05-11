@@ -60,39 +60,31 @@ impl<'a> Picture<'a> {
 
     pub fn add_point(&mut self, x: u16, y: u16) {
         if GLOBAL_SCALE == 2 {
-            self.tx_buffer[self.out_index + 1] = (x >> 1) as u8;
-            self.tx_buffer[self.out_index + 3] = (y >> 1) as u8;
+            self.add_raw_point((x >> 1) as u8, (y >> 1) as u8);
 
-            if (x & 1) == 1 {
-                self.tx_buffer[self.out_index + 1 + 4] = ((x + 1) >> 1) as u8;
+            let second_x = if (x & 1) == 1 {
+                ((x + 1) >> 1) as u8
             } else {
-                self.tx_buffer[self.out_index + 1 + 4] = (x >> 1) as u8;
-            }
-            if (y & 1) == 1 {
-                self.tx_buffer[self.out_index + 3 + 4] = ((y + 1) >> 1) as u8;
-            } else {
-                self.tx_buffer[self.out_index + 3 + 4] = (y >> 1) as u8;
-            }
+                (x >> 1) as u8
+            };
 
-            self.tx_buffer[self.out_index + 0] = 0;
-            self.tx_buffer[self.out_index + 2] = 0;
-            self.tx_buffer[self.out_index + 0 + 4] = 0;
-            self.tx_buffer[self.out_index + 2 + 4] = 0;
-            self.out_index += 8;
+            let second_y = if (y & 1) == 1 {
+                ((y + 1) >> 1) as u8
+            } else {
+                (y >> 1) as u8
+            };
+
+            self.add_raw_point(second_x, second_y);
         } else {
-            self.tx_buffer[self.out_index + 1] = x as u8;
-            self.tx_buffer[self.out_index + 3] = y as u8;
-            self.tx_buffer[self.out_index + 0] = 0;
-            self.tx_buffer[self.out_index + 2] = 0;
-            self.out_index += 4;
+            self.add_raw_point(x as u8, y as u8);
         }
     }
 
     pub fn add_raw_point(&mut self, x: u8, y: u8) {
-        self.tx_buffer[self.out_index + 1] = x as u8;
-        self.tx_buffer[self.out_index + 3] = y as u8;
         self.tx_buffer[self.out_index + 0] = 0;
+        self.tx_buffer[self.out_index + 1] = x as u8;
         self.tx_buffer[self.out_index + 2] = 0;
+        self.tx_buffer[self.out_index + 3] = y as u8;
         self.out_index += 4;
     }
 
