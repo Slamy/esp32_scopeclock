@@ -28,22 +28,9 @@ use hal::{dma_buffers, interrupt, Blocking};
 
 use static_cell::make_static;
 
-// TODO EVIL
-unsafe fn make_static<T: ?Sized>(t: &T) -> &'static T {
-    core::mem::transmute(t)
-}
-
-// TODO EVIL
-unsafe fn make_static_mut<T: ?Sized>(t: &mut T) -> &'static mut T {
-    core::mem::transmute(t)
-}
-
 struct DmaData {
-    tx: I2sTx<'static, I2S0, I2s0DmaChannel, Blocking>,
-    transfer: Option<I2sWriteDmaTransfer<'static, 'static, I2S0, I2s0DmaChannel, Blocking>>,
     canvas: Option<&'static mut [u8]>,
     next_display: Option<Picture<'static>>,
-    current_display: Option<Picture<'static>>,
     z_blank: GpioPin<Output<PushPull>, 32>,
     delay: Delay,
 }
@@ -101,11 +88,8 @@ pub fn scopeclock_init(
     println!("{} bytes", drawing1.out_index);
 
     let dma_data = DmaData {
-        tx: i2s.i2s_tx.build(),
-        transfer: None,
         canvas: None,
         next_display: Some(drawing1),
-        current_display: Some(drawing2),
         z_blank,
         delay,
     };
@@ -114,7 +98,12 @@ pub fn scopeclock_init(
         DMA_DATA.borrow_ref_mut(cs).replace(dma_data);
     });
 
-    update_frame();
+    unsafe {
+        TX.replace(i2s.i2s_tx.build());
+        CURRENT_DISPLAY.replace(drawing2);
+        update_frame();
+    };
+
     interrupt::enable_direct(Interrupt::I2S0, CpuInterrupt::Interrupt14NmiPriority7).unwrap();
     interrupt::enable(Interrupt::FROM_CPU_INTR3, Priority::Priority3).unwrap();
 
@@ -153,41 +142,51 @@ pub async fn scopeclock_task(static_part_meta: StaticPartMeta) {
     }
 }
 
+// Must be shared mutable to allow usage with the DMA for now. write_dma of I2sTx demands it
+static mut CURRENT_DISPLAY: Option<Picture<'static>> = None;
+
+// Write_dma call requires I2sTx being borrowed for static
+static mut TX: Option<I2sTx<'static, I2S0, I2s0DmaChannel, Blocking>> = None;
+
 #[ram]
-fn select_next_picture(dma_data: &mut DmaData) {
+unsafe fn select_next_picture(dma_data: &mut DmaData) {
     if let Some(next) = dma_data.next_display.take() {
         // So we have a next picture to display?
         // Move canvas <- current to have another free canvas to draw on
         // current <- next
         // next is left empty in that case
-        let current = dma_data.current_display.take().unwrap();
+        let current = CURRENT_DISPLAY.take().unwrap();
         dma_data.canvas = Some(current.tx_buffer);
-        dma_data.current_display.replace(next);
+        CURRENT_DISPLAY.replace(next);
     } else {
         //println!("Missed frame");
     }
 }
 
 #[ram]
-fn update_frame() {
+// Function is not reentrant!
+unsafe fn update_frame() {
+    static mut TRANSFER: Option<
+        I2sWriteDmaTransfer<'static, 'static, I2S0, I2s0DmaChannel, Blocking>,
+    > = None;
+
     //let transfer_line_for_line = (embassy_time::Instant::now().as_secs() % 10) >= 5;
     let transfer_line_for_line = true;
+    let stolen_peripheral = Peripherals::steal(); // TODO find a way around this
+    let stolen_i2s0 = stolen_peripheral.I2S0;
 
     critical_section::with(|cs| {
         let mut dma_data = DMA_DATA.borrow_ref_mut(cs);
-        let dma_data = unsafe { make_static_mut(dma_data.as_mut().unwrap()) };
+        let dma_data = dma_data.as_mut().unwrap();
 
-        let evil_peripheral = unsafe { Peripherals::steal() };
-        let evil_i2s0 = evil_peripheral.I2S0;
-
-        if let Some(mut t) = dma_data.transfer.take() {
+        if let Some(mut t) = TRANSFER.take() {
             t.clear_int();
             t.wait().unwrap();
         }
 
         // look for next picture to show
         let tx_slice = if transfer_line_for_line {
-            let current_display = dma_data.current_display.as_mut().unwrap();
+            let current_display = CURRENT_DISPLAY.as_mut().unwrap();
 
             let indizes =
                 if let Some(indizes) = current_display.parts.get(current_display.current_part) {
@@ -197,48 +196,56 @@ fn update_frame() {
                 } else {
                     select_next_picture(dma_data);
 
-                    let current_display = dma_data.current_display.as_mut().unwrap();
+                    // CURRENT_DISPLAY was swapped. Let's grab it again
+                    let current_display = CURRENT_DISPLAY.as_mut().unwrap();
                     current_display.current_part = 1;
                     current_display.parts[0]
                 };
-            let to_draw = dma_data.current_display.as_mut().unwrap();
+            let to_draw = CURRENT_DISPLAY.as_mut().unwrap();
             let tx_slice = &to_draw.tx_buffer[indizes.0..indizes.1];
             tx_slice
         } else {
             select_next_picture(dma_data);
 
-            let to_draw = dma_data.current_display.as_ref().unwrap();
+            let to_draw = CURRENT_DISPLAY.as_ref().unwrap();
             let tx_slice = &to_draw.tx_buffer[0..to_draw.out_index];
             tx_slice
         };
 
+        // Make a small transfer to establish the first required sample for the next line
+        // This gives us the possibility to wait some time before disabling blank
+        let tx: &mut I2sTx<'_, I2S0, I2s0DmaChannel, Blocking> = TX.as_mut().unwrap();
         let tx_startslice = &tx_slice[0..4];
-        let transfer = dma_data
-            .tx
-            .write_dma(unsafe { make_static(&tx_startslice) })
-            .unwrap();
+        let transfer = tx.write_dma(&tx_startslice).unwrap();
+        // delay to give the DMA some time to activate
         dma_data.delay.delay_nanos(10);
         transfer.wait().unwrap();
+
         //dma_data.delay.delay_micros(10);
 
-        let transfer = dma_data
-            .tx
-            .write_dma(unsafe { make_static(&tx_slice) })
-            .unwrap();
-        evil_i2s0
+        // before leaving function, put tx_slice into something with static lifetime
+        static mut CURRENT_TX_SLICE: Option<&[u8]> = None;
+        let tx_slice = {
+            CURRENT_TX_SLICE.replace(tx_slice);
+            CURRENT_TX_SLICE.as_ref().unwrap()
+        };
+
+        let transfer = tx.write_dma(tx_slice).unwrap();
+        stolen_i2s0
             .int_clr()
             .write(|f| f.tx_rempty().clear_bit_by_one());
 
-        dma_data.transfer = Some(transfer);
+        TRANSFER = Some(transfer);
 
         // enable the beam after a short pause
         dma_data.z_blank.set_output_high(false);
+        // delay to give the DMA some time to activate
         dma_data.delay.delay_nanos(10);
 
-        evil_i2s0
+        stolen_i2s0
             .int_clr()
             .write(|f| f.tx_rempty().clear_bit_by_one());
-        evil_i2s0.int_ena().write(|f| f.tx_rempty().set_bit());
+        stolen_i2s0.int_ena().write(|f| f.tx_rempty().set_bit());
     });
 }
 
@@ -255,10 +262,11 @@ unsafe extern "C" fn __naked_level_7_interrupt() {
 #[ram]
 #[interrupt]
 fn FROM_CPU_INTR3() {
-    let evil_peripheral = unsafe { Peripherals::steal() };
-    let system = evil_peripheral.SYSTEM.split();
+    // Clear the software interrupt
+    let stolen_peripheral = unsafe { Peripherals::steal() };
+    let system = stolen_peripheral.SYSTEM.split();
     let mut sw_int = system.software_interrupt_control;
     sw_int.reset(SoftwareInterrupt::SoftwareInterrupt3);
 
-    update_frame();
+    unsafe { update_frame() };
 }

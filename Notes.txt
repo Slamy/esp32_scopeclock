@@ -35,6 +35,14 @@ arm-none-eabi-nm -Crtd --size-sort target/xtensa-esp32-none-elf/release/scopeclo
 * Externer DAC mit I2S und Z Blank im Sample?
 * Circular DMA ohne Pause?
 * Energiesparmodus ?
+* https://www.reichelt.de/d-a-wandler-12-bit-2-kanal-spi-2-7--5-5-v-dip-14-mcp-4922-e-p-p90090.html
+* https://www.reichelt.de/d-a-wandler-8-bit-2-kanal-spi-2-7--5-5-v-dip-14-mcp-4902-e-p-p109774.html?&trstct=pos_5&nbc=1
+
+
+
+https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/peripherals/ledc.html
+The LED PWM Controller is designed primarily to drive LEDs. It provides a large flexibility of PWM duty cycle settings. For instance, the PWM frequency of 5 kHz can have the maximum duty resolution of 13 bits.
+
 
 
 NTP3 NtpResult { seconds: 1713908180, seconds_fraction: 1237931791, roundtrip: 34617, offset: -4512, stratum: 3, precision: -24 }

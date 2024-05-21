@@ -80,7 +80,7 @@ pub async fn time_stuff(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>
         port: 123,
     };
 
-    // get first
+    // get first coarse measurement
     loop {
         let res = get_time(ntp_endpoint, &socket, ntp_context);
         let res = embassy_time::with_timeout(Duration::from_secs(3), res).await;
@@ -108,7 +108,7 @@ pub async fn time_stuff(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>
         }
     }
 
-    //get next ones
+    //get next ones to refine the offset
     Timer::after(Duration::from_millis(1000)).await;
 
     for _ in 0..4 {
@@ -141,6 +141,7 @@ pub async fn time_stuff(stack: &'static Stack<WifiDevice<'static, WifiStaDevice>
         Timer::after(Duration::from_millis(1000)).await;
     }
 
+    // we should be synced now
     loop {
         let res = get_time(ntp_endpoint, &socket, ntp_context);
         let res = embassy_time::with_timeout(Duration::from_secs(3), res).await;

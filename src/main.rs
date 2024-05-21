@@ -70,8 +70,6 @@ async fn main(spawner: Spawner) -> ! {
 
     let system = peripherals.SYSTEM.split();
 
-    //let mut sw_int = system.software_interrupt_control;
-
     let clocks = ClockControl::max(system.clock_control).freeze();
     let delay = hal::delay::Delay::new(&clocks);
     init_heap();
@@ -120,18 +118,7 @@ async fn main(spawner: Spawner) -> ! {
     let mut _dac1 = DAC1::new(peripherals.DAC1, dac1_pin);
     let mut _dac2 = DAC2::new(peripherals.DAC2, dac2_pin);
     set_dma_mode(true);
-    /*
-    loop {
-        for y in 0..255 {
-            _dac1.set_dma_mode(y > 128);
-            for x in 0..255 {
-                _dac1.write(x);
-                _dac2.write(y);
-                delay.delay_micros(1);
-            }
-        }
-    }
-    */
+
     let dma = Dma::new(peripherals.DMA);
     let dma_channel = dma.i2s0channel;
     let i2s = peripherals.I2S0;
@@ -189,8 +176,8 @@ async fn connection(mut controller: WifiController<'static>) {
             println!("Starting wifi");
             controller.start().await.unwrap();
             println!("Wifi started!");
-            //let retval = unsafe {esp_wifi_set_max_tx_power(8)};
-            //println!("tx power {}",retval);
+            let retval = unsafe {esp_wifi_set_max_tx_power(8)};
+            println!("tx power {}",retval);
         }
         println!("About to connect...");
 
