@@ -1,0 +1,3 @@
+[submodule "extern/esp-hal"]
+	path = extern/esp-hal
+	url = https://github.com/Slamy/esp-hal.git

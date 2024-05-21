@@ -1,0 +1,70 @@
+
+# Installation
+
+## ESP32 Xtensa Toolchain
+cargo install espup
+espup install
+
+## espflash
+cargo install espflash
+
+
+# DAC DMA in esp idf
+https://github.com/espressif/esp-idf/blob/master/components/esp_driver_dac/esp32/dac_dma.c#L198
+https://github.com/espressif/esp-idf/blob/master/components/esp_driver_dac/include/driver/dac_types.h#L37
+
+
+# Analyze memory
+arm-none-eabi-nm -Crtd --size-sort target/xtensa-esp32-none-elf/release/scopeclock | less
+
+
+# TODO
+
+* Z Blanking testen mit neuer DMA
+* 3V3 Rail fixen
+* Ziffernblatt
+* Reset verhalten sicher machen für die Röhre
+* Braucht es Tasten zur Bedienung?
+* IRQ kommt nicht immer flott genug. Wie lösen?
+    * Z Blank mit ULP Coprocessor?
+    * IRQ auslösen kurz bevor alles gezeichnet wurde?
+        * Mit Timer? Mit extra DMA Frame?
+        * Könnte unsicher sein. Latenz scheint höchst problematisch
+    * High Prio IRQ? Der ESP kann so etwas, ist aber schlecht dokumentiert.
+    * Strahl in der Ecke lagern. Da wäre dann auch kein Phosphor mehr.
+* Externer DAC mit I2S und Z Blank im Sample?
+* Circular DMA ohne Pause?
+
+
+NTP3 NtpResult { seconds: 1713908180, seconds_fraction: 1237931791, roundtrip: 34617, offset: -4512, stratum: 3, precision: -24 }
+NTP3 NtpResult { seconds: 1713908185, seconds_fraction: 1435374948, roundtrip: 33071, offset: 348, stratum: 3, precision: -24 }
+NTP3 NtpResult { seconds: 1713908190, seconds_fraction: 1572679258, roundtrip: 30028, offset: -150, stratum: 3, precision: -24 }
+NTP3 Error IncorrectStratumHeaders
+NTP3 Timeout TimeoutError
+NTP3 Error IncorrectStratumHeaders
+NTP3 Timeout TimeoutError
+NTP3 Error IncorrectStratumHeaders
+NTP3 Timeout TimeoutError
+
+Questions about instabilities of Level 4 interrupt
+
+Hello, I'm pretty new to Rust on the ESP32. Nonetheless it seems that I'm already hands deep doing stuff not intended because I can't find much info about it.
+The latency of the usual IRQs is not very constant and alternates between 2µs and 70µs. So I wanted to use a high priority interrupt.
+Using it seems to be rather unstable
+
+40080550 <__level_4_interrup>:
+40080550:	004136               	entry	a1, 32
+40080553:	ffab81               	l32r	a8, 40080400 <_init_end> (3ff4f018 <_sidata+0xb34e90>)
+40080556:	ffab91               	l32r	a9, 40080404 <_init_end+0x4> (fffff <PS_WOE+0xbffff>)
+40080559:	0020c0               	memw
+4008055c:	0899                	s32i.n	a9, a8, 0
+4008055e:	ffaa81               	l32r	a8, 40080408 <_init_end+0x8> (3ff000e8 <_sidata+0xae5f60>)
+40080561:	190c                	movi.n	a9, 1
+40080563:	0020c0               	memw
+40080566:	0899                	s32i.n	a9, a8, 0
+40080568:	000080               	ret
+4008056b:	0020f0               	nop
+4008056e:	f01d                	retw.n
+
+
+/home/andre/.rustup/toolchains/esp/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp-elf-objdump -D target/xtensa-esp32-none-elf/release/scopeclock > test
